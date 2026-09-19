@@ -128,9 +128,9 @@ Ret için `{"decision":"reject","reason":"Fotoğraf net değil."}` kullanılır.
 
 ## Görsellerde tanımlanmayan kurallar
 
-- Toplam bilet dolunca durum `completed` olur ve kart `Sonlandı` gösterir. **Kazanan seçimi, teslimat, iade ve satıcıya ödeme** bu ekranlarda tanımlanmadığından bu sürümde gerçekleştirilmez.
+- Toplam bilet dolunca durum `completed` olur ve kart `Sonlandı` gösterir. **Kazanan seçimi, teslimat ve satıcıya ödeme** bu ekranlarda tanımlanmadığından bu sürümde gerçekleştirilmez. Aktif/bekleyen çekilişin operatör tarafından iptali ve bilet iadesi [profil API rehberinde](profile-api.md) açıklanmıştır.
 - Bilet satın alma/ödeme sağlayıcısı eklenmedi; operatör kredisi yalnızca yetkili manuel/test işlemdir.
-- Değerlendirme başlangıç kuralı: sonlanan çekilişe katılan kullanıcı çekiliş başına bir kez 1–5 puan verebilir. Bu, doğrulanmış teslimat değerlendirmesi değildir. Henüz değerlendirme yoksa ortalama ve sayı sıfırdır.
+- Değerlendirme başlangıç kuralı: sonlanan çekilişe katılan kullanıcı çekiliş başına bir kez 1–5 arasında, 0.5 adımlı puan verebilir. Bu, doğrulanmış teslimat değerlendirmesi değildir. Henüz değerlendirme yoksa ortalama ve sayı sıfırdır.
 - Kategori/marka kataloğu `internal/domain/catalog.go`, Türkçe yardım metinleri `internal/httpapi/marketplace.go` içindedir. Bunlar başlangıç kataloğudur; gerçek katalog ve editoryal metinler burada değiştirilebilir. `Other Tag` görsel yer tutucusudur.
 - Bildirimler uygulama içidir; push bildirim sağlayıcısı bağlı değildir. Ürün onayı/reddi ve yeni soru/yanıt olaylarında kayıt oluşturulur.
 
@@ -139,10 +139,9 @@ Ret için `{"decision":"reject","reason":"Fotoğraf net değil."}` kullanılır.
 ```bash
 go test ./...
 go vet ./...
-go build .
 MONGODB_TEST_URI='mongodb://127.0.0.1:27029/?replicaSet=ceksepet_test_rs' go test ./... -count=1
 ```
 
 MongoDB testleri benzersiz `ceksepet_test_*` / `ceksepet_http_test_*` veritabanı oluşturup yalnızca kendi veritabanlarını kaldırır. URI verilmediğinde bu testler atlanır. Testler HTTP ekran akışlarını, yetki ayrımını, boş listeleri, hesaplama/yuvarlamayı, işlemlerin geri alınmasını, eşzamanlı son bilet kullanımını ve aynı anahtarla mükerrer istekleri kapsar.
 
-Bu çalışma sırasında 18 test yerel MongoDB replica set dahil başarıyla çalıştırıldı; `go vet`, derleme ve OpenAPI 3 şema doğrulaması geçti. Windows ortamında C derleyicisi (`gcc`) bulunmadığı için `go test -race` çalıştırılamadı. Eşzamanlılık senaryoları normal test çalıştırmasıyla gerçek MongoDB üzerinde doğrulandı.
+MongoDB testlerinin çalışıp çalışmadığını `go test -v ./...` çıktısındaki PASS/SKIP satırlarından kontrol edin. `go test -race` Windows'ta ayrıca uyumlu bir C derleyicisi gerektirir.

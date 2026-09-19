@@ -18,6 +18,7 @@ var (
 // without requiring a networked database.
 type DataStore interface {
 	MarketplaceStore
+	ProfileStore
 	Ping(context.Context) error
 	CreateRegistration(context.Context, domain.Registration) error
 	GetRegistration(context.Context, string) (domain.Registration, error)

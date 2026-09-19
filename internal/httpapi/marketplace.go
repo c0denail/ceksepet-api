@@ -220,15 +220,16 @@ func (s *Server) createRaffle(w http.ResponseWriter, r *http.Request) {
 
 type raffleCard struct {
 	domain.Raffle
-	BrandName        string   `json:"brandName"`
-	CategoryName     string   `json:"categoryName"`
-	PhotoURLs        []string `json:"photoUrls"`
-	IsFavorite       bool     `json:"isFavorite"`
-	IsNew            bool     `json:"isNew"`
-	Badge            string   `json:"badge,omitempty"`
-	ProgressPercent  float64  `json:"progressPercent"`
-	RemainingTickets int64    `json:"remainingTickets"`
-	MyTickets        int64    `json:"myTickets"`
+	BrandName         string   `json:"brandName"`
+	CategoryName      string   `json:"categoryName"`
+	PhotoURLs         []string `json:"photoUrls"`
+	IsFavorite        bool     `json:"isFavorite"`
+	IsNew             bool     `json:"isNew"`
+	Badge             string   `json:"badge,omitempty"`
+	ProgressPercent   float64  `json:"progressPercent"`
+	RemainingTickets  int64    `json:"remainingTickets"`
+	MyTickets         int64    `json:"myTickets"`
+	MyRefundedTickets int64    `json:"myRefundedTickets"`
 }
 
 func (s *Server) card(r *http.Request, raffle domain.Raffle, user string) (raffleCard, error) {
@@ -249,12 +250,16 @@ func (s *Server) card(r *http.Request, raffle domain.Raffle, user string) (raffl
 			return result, e
 		}
 		result.MyTickets = p.Tickets
+		result.MyRefundedTickets = p.RefundedTickets
 	}
 	if raffle.Quote.TotalTickets > 0 {
 		result.ProgressPercent = float64(raffle.SoldTickets) * 100 / float64(raffle.Quote.TotalTickets)
 	}
 	result.IsNew = raffle.PublishedAt != nil && s.now().Sub(*raffle.PublishedAt).Hours() < 7*24
-	if raffle.Status == domain.RaffleCompleted {
+	if raffle.Status == domain.RaffleCancelled {
+		result.Badge = "İptal edildi"
+		result.RemainingTickets = 0
+	} else if raffle.Status == domain.RaffleCompleted {
 		result.Badge = "Sonlandı"
 	} else if result.ProgressPercent >= 80 {
 		result.Badge = "Bitmek üzere"
@@ -270,7 +275,7 @@ func (s *Server) visibleRaffle(w http.ResponseWriter, r *http.Request, user stri
 		s.marketError(w, err)
 		return raffle, false
 	}
-	if raffle.Status != domain.RaffleActive && raffle.Status != domain.RaffleCompleted && raffle.SellerID != user {
+	if !raffle.Public() && raffle.SellerID != user {
 		s.marketError(w, store.ErrNotFound)
 		return raffle, false
 	}
@@ -333,7 +338,7 @@ func (s *Server) raffleList(w http.ResponseWriter, r *http.Request, mode string)
 		}
 	} else {
 		var ok bool
-		user, ok = s.marketUser(w, r, mode != "public" && mode != "related")
+		user, ok = s.marketUser(w, r, mode != "public" && mode != "related" && mode != "seller")
 		if !ok {
 			return
 		}
@@ -379,6 +384,18 @@ func (s *Server) raffleList(w http.ResponseWriter, r *http.Request, mode string)
 		}
 	case "joined":
 		f.JoinedBy = user
+		if f.Status == "all" {
+			f.Status = ""
+		}
+	case "seller":
+		f.SellerID = r.PathValue("sellerId")
+		if _, err := s.store.GetUserByID(r.Context(), f.SellerID); err != nil {
+			s.marketError(w, err)
+			return
+		}
+		if f.Status == "all" {
+			f.Status = ""
+		}
 	case "favorites":
 		f.FavoritedBy = user
 	case "operator":
@@ -396,7 +413,10 @@ func (s *Server) raffleList(w http.ResponseWriter, r *http.Request, mode string)
 	}
 	allowed := []string{"", domain.RaffleActive, domain.RaffleCompleted}
 	if mode == "mine" || mode == "operator" {
-		allowed = append(allowed, "all", domain.RafflePending, domain.RaffleRejected)
+		allowed = append(allowed, "all", domain.RafflePending, domain.RaffleRejected, domain.RaffleCancelled)
+	}
+	if mode == "joined" {
+		allowed = append(allowed, domain.RaffleCancelled)
 	}
 	if !contains(allowed, f.Status) {
 		writeError(w, 400, *validationError("status", "Durum bu liste için geçersiz."))
@@ -428,7 +448,7 @@ func (s *Server) favorite(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if raffle.Status != domain.RaffleActive && raffle.Status != domain.RaffleCompleted {
+	if r.Method == http.MethodPut && raffle.Status != domain.RaffleActive && raffle.Status != domain.RaffleCompleted {
 		s.marketError(w, store.ErrRaffleUnavailable)
 		return
 	}

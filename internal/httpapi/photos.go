@@ -83,7 +83,7 @@ func (s *Server) servePhoto(w http.ResponseWriter, r *http.Request) {
 			s.marketError(w, err)
 			return
 		}
-		public = raffle.Status == domain.RaffleActive || raffle.Status == domain.RaffleCompleted
+		public = raffle.Public()
 	}
 	if !public && user != photo.OwnerID && !operator {
 		s.marketError(w, store.ErrNotFound)

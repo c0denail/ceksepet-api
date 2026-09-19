@@ -4,6 +4,8 @@
 
 Altı mobil ekranın alan eşlemesi, yeni endpointler, fiyat/komisyon kuralları ve baştan sona deneme adımları: **[Ürün ve çekiliş API rehberi](docs/marketplace-api.md)**. Yeni ürünler operatör onayından sonra yayına girer. Varsayılan hesap 1 bilet = 1 TL, komisyon %10'dur; `.env` içindeki `TICKET_VALUE_KURUS` ve `COMMISSION_BPS` ile değiştirilir. Yeni hesapların bilet bakiyesi sıfırdır.
 
+Profil, satıcı profili, çekiliş durum filtreleri, şikâyet, SSS ve iptal iadesi: **[Profil ekranları API rehberi](docs/profile-api.md)**. Kartla bilet yükleme, ödeme sağlayıcısı seçilene kadar kapsam dışında bırakılmıştır.
+
 ## Temel özellikler
 
 - İki adımlı kullanıcı kaydı ve kayıt SMS doğrulaması
@@ -65,7 +67,7 @@ Doğrudan Go komutuyla da çalıştırabilirsiniz:
 go run .
 ```
 
-Bu komut proje kökündeki `main.go` girişini çalıştırır. Önceki `go run ./cmd/api` komutu da aynı başlangıç kodunu kullanır ve çalışmaya devam eder.
+Bu komut proje kökündeki `main.go` girişini çalıştırır.
 
 Başarılı başlangıçtan sonra:
 
@@ -273,7 +275,6 @@ Container içindeki uygulama `ceksepet-api` adıyla, yetkisiz `ceksepet` Linux k
 ```text
 .
 ├── main.go                   # go run . için giriş noktası
-├── cmd/api/                  # Önceki çalıştırma komutuyla uyumlu giriş noktası
 ├── docs/                     # İş akışı ve gereksinim notları
 ├── internal/app/             # Ortak başlangıç ve graceful shutdown
 ├── internal/config/          # .env yükleme ve yapılandırma doğrulama

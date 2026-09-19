@@ -46,6 +46,7 @@ func New(cfg config.Config, dataStore store.DataStore, notifier OTPNotifier, log
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.marketplaceRoutes(mux)
+	s.profileRoutes(mux)
 	mux.HandleFunc("GET /health/live", s.live)
 	mux.HandleFunc("GET /health/ready", s.ready)
 	mux.HandleFunc("GET /api/v1/avatars", s.listAvatars)
@@ -110,6 +111,7 @@ func (s *Server) newAccessSession(userID string, now time.Time) (string, domain.
 
 func (s *Server) userResponse(user domain.User) userResponse {
 	return userResponse{
+		DisplayName: user.FirstName + " " + user.LastName, TicketBalance: user.TicketBalance,
 		ID: user.ID, FirstName: user.FirstName, LastName: user.LastName,
 		Phone: user.Phone, Username: user.Username, AvatarID: user.AvatarID,
 		AvatarURL: s.avatarURL(user.AvatarID), CreatedAt: user.CreatedAt.UTC().Format(time.RFC3339),

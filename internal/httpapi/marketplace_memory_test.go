@@ -20,6 +20,7 @@ type memoryMarket struct {
 	questions      map[string]domain.Question
 	reviews        map[string]domain.Review
 	notifications  map[string]domain.Notification
+	reports        map[string]domain.SellerReport
 }
 
 func newMemoryMarket() memoryMarket {
@@ -27,6 +28,7 @@ func newMemoryMarket() memoryMarket {
 		photos: map[string]domain.Photo{}, raffles: map[string]domain.Raffle{}, favorites: map[string]bool{},
 		participations: map[string]domain.Participation{}, entries: map[string]domain.TicketEntry{},
 		questions: map[string]domain.Question{}, reviews: map[string]domain.Review{}, notifications: map[string]domain.Notification{},
+		reports: map[string]domain.SellerReport{},
 	}
 }
 
@@ -84,7 +86,7 @@ func (s *memoryStore) ListRaffles(_ context.Context, f store.RaffleFilter) ([]do
 	defer s.mu.Unlock()
 	rows := []domain.Raffle{}
 	for _, r := range s.raffles {
-		if f.Status == "" && r.Status != domain.RaffleActive && r.Status != domain.RaffleCompleted {
+		if f.Status == "" && r.Status != domain.RaffleActive && r.Status != domain.RaffleCompleted && !(f.JoinedBy != "" && r.Status == domain.RaffleCancelled) {
 			continue
 		}
 		if f.Status != "" && f.Status != "all" && r.Status != f.Status {
@@ -354,7 +356,7 @@ func (s *memoryStore) checkMarketDelete(user string) error {
 		}
 	}
 	for _, r := range s.raffles {
-		if r.SellerID == user && (r.Status == domain.RaffleActive || r.Status == domain.RaffleCompleted) {
+		if r.SellerID == user && (r.Status == domain.RaffleActive || r.Status == domain.RaffleCompleted || r.SoldTickets > 0) {
 			return store.ErrAccountInUse
 		}
 	}

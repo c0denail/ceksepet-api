@@ -22,9 +22,8 @@ func (s *Store) ensureMarketplaceIndexes(ctx context.Context) error {
 			{Keys: bson.D{{Key: "seller_id", Value: 1}, {Key: "status", Value: 1}}},
 			{Keys: bson.D{{Key: "category_id", Value: 1}, {Key: "status", Value: 1}}},
 		},
-		"photos":         {{Keys: bson.D{{Key: "owner_id", Value: 1}}}},
-		"favorites":      {{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "raffle_id", Value: 1}}, Options: options.Index().SetUnique(true)}},
-		"participations": {{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "raffle_id", Value: 1}}, Options: options.Index().SetUnique(true)}},
+		"photos":    {{Keys: bson.D{{Key: "owner_id", Value: 1}}}},
+		"favorites": {{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "raffle_id", Value: 1}}, Options: options.Index().SetUnique(true)}},
 		"ticket_entries": {
 			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "key", Value: 1}}, Options: options.Index().SetUnique(true)},
 			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
@@ -35,6 +34,11 @@ func (s *Store) ensureMarketplaceIndexes(ctx context.Context) error {
 			{Keys: bson.D{{Key: "seller_id", Value: 1}, {Key: "created_at", Value: -1}}},
 		},
 		"notifications": {{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}}},
+		"seller_reports": {
+			{Keys: bson.D{{Key: "reporter_id", Value: 1}, {Key: "seller_id", Value: 1}}, Options: options.Index().SetName("uq_open_seller_report").SetUnique(true).SetPartialFilterExpression(bson.M{"status": "open"})},
+			{Keys: bson.D{{Key: "status", Value: 1}, {Key: "created_at", Value: -1}}},
+		},
+		"participations": {{Keys: bson.D{{Key: "raffle_id", Value: 1}}}, {Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "raffle_id", Value: 1}}, Options: options.Index().SetUnique(true)}},
 	}
 	for name, indexes := range definitions {
 		if _, err := s.market(name).Indexes().CreateMany(ctx, indexes); err != nil {
@@ -107,7 +111,11 @@ func (s *Store) ListRaffles(ctx context.Context, f RaffleFilter) ([]domain.Raffl
 	if f.Status != "" {
 		filter["status"] = f.Status
 	} else {
-		filter["status"] = bson.M{"$in": []string{domain.RaffleActive, domain.RaffleCompleted}}
+		statuses := []string{domain.RaffleActive, domain.RaffleCompleted}
+		if f.JoinedBy != "" {
+			statuses = append(statuses, domain.RaffleCancelled)
+		}
+		filter["status"] = bson.M{"$in": statuses}
 	}
 	if f.Status == "all" {
 		delete(filter, "status")
@@ -457,7 +465,7 @@ func (s *Store) checkMarketplaceDeletion(ctx context.Context, user string) error
 		name   string
 		filter bson.M
 	}{
-		{"raffles", bson.M{"seller_id": user, "status": bson.M{"$in": []string{domain.RaffleActive, domain.RaffleCompleted}}}},
+		{"raffles", bson.M{"seller_id": user, "$or": bson.A{bson.M{"status": bson.M{"$in": []string{domain.RaffleActive, domain.RaffleCompleted}}}, bson.M{"sold_tickets": bson.M{"$gt": 0}}}}},
 		{"ticket_entries", bson.M{"user_id": user}},
 	} {
 		n, err := s.market(entry.name).CountDocuments(ctx, entry.filter, options.Count().SetLimit(1))

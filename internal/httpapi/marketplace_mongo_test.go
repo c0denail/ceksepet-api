@@ -13,6 +13,19 @@ import (
 )
 
 func TestMongoMarketplaceHTTPScreens(t *testing.T) {
+	marketplaceScreensEndToEnd(t, mongoTestApp(t))
+}
+
+func TestMongoProfileHTTPScreens(t *testing.T) {
+	profileScreens(t, mongoTestApp(t))
+}
+
+func TestMongoCancelledRaffleHTTP(t *testing.T) {
+	cancelledRaffleRefundAndFilters(t, mongoTestApp(t))
+}
+
+func mongoTestApp(t *testing.T) *testApp {
+	t.Helper()
 	uri := os.Getenv("MONGODB_TEST_URI")
 	if uri == "" {
 		t.Skip("MONGODB_TEST_URI is not set")
@@ -38,5 +51,5 @@ func TestMongoMarketplaceHTTPScreens(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	marketplaceScreensEndToEnd(t, newTestAppWithStore(t, dataStore))
+	return newTestAppWithStore(t, dataStore)
 }

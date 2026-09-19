@@ -53,14 +53,16 @@ type verifyLoginOTPRequest struct {
 }
 
 type userResponse struct {
-	ID        string `json:"id"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Phone     string `json:"phone"`
-	Username  string `json:"username"`
-	AvatarID  string `json:"avatarId"`
-	AvatarURL string `json:"avatarUrl"`
-	CreatedAt string `json:"createdAt"`
+	DisplayName   string `json:"displayName"`
+	TicketBalance int64  `json:"ticketBalance"`
+	ID            string `json:"id"`
+	FirstName     string `json:"firstName"`
+	LastName      string `json:"lastName"`
+	Phone         string `json:"phone"`
+	Username      string `json:"username"`
+	AvatarID      string `json:"avatarId"`
+	AvatarURL     string `json:"avatarUrl"`
+	CreatedAt     string `json:"createdAt"`
 }
 
 type publicUserResponse struct {

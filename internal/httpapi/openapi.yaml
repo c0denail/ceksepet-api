@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ÇekSepet Mobile API
-  version: 3.0.0
+  version: 3.1.0
   description: 'ÇekSepet mobil uygulamasının telefon + 6 haneli PIN + çift aşamalı SMS OTP akışı.
 
 
@@ -54,6 +54,8 @@ tags:
 - name: Wallet
 - name: Community
 - name: Notifications
+- name: Profile
+- name: Reports
 paths:
   /health/live:
     get:
@@ -1232,6 +1234,7 @@ paths:
           - completed
           - pending
           - rejected
+          - cancelled
           - all
   /api/v1/users/me/participations:
     get:
@@ -1339,6 +1342,8 @@ paths:
           enum:
           - active
           - completed
+          - cancelled
+          - all
   /api/v1/users/me/favorites:
     get:
       tags:
@@ -2490,6 +2495,7 @@ paths:
           - active
           - completed
           - rejected
+          - cancelled
           - all
           default: pending
   /api/v1/operator/raffles/{raffleId}/moderation:
@@ -2636,6 +2642,317 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TicketCreditRequest'
+  "/api/v1/sellers/{sellerId}":
+    get:
+      tags: ["Profile"]
+      summary: "Satıcı profil başlığı ve değerlendirme özeti"
+      operationId: "getSellerProfile"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerProfileResponse"
+        "400":
+          description: "Geçersiz alan"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          description: "Geçersiz oturum"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          description: "Kayıt bulunamadı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          description: "Sunucu hatası"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+      parameters: [{"name": "sellerId", "in": "path", "required": true, "schema": {"type": "string"}}]
+      security: [{}, {"bearerAuth": []}]
+      description: "Yalnızca public satıcı bilgisi. raffleCount aktif ve sonlanan çekilişlerin toplamıdır. canReport oturum varsa ve satıcı kendiniz değilseniz true olur."
+  "/api/v1/sellers/{sellerId}/raffles":
+    get:
+      tags: ["Profile"]
+      summary: "Satıcının yayınlanmış çekilişleri"
+      operationId: "listSellerRaffles"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/RafflePage"
+        "400":
+          description: "Geçersiz alan"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          description: "Geçersiz oturum"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          description: "Kayıt bulunamadı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          description: "Sunucu hatası"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+      parameters: [{"name": "sellerId", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}, {"name": "offset", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 0, "maximum": 1000000, "default": 0}}, {"name": "status", "in": "query", "required": false, "schema": {"type": "string", "enum": ["all", "active", "completed"], "default": "all"}}, {"name": "q", "in": "query", "required": false, "schema": {"type": "string", "maxLength": 100}}, {"name": "categoryId", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "brandId", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "sort", "in": "query", "required": false, "schema": {"type": "string", "enum": ["newest", "popular"], "default": "newest"}}]
+      security: [{}, {"bearerAuth": []}]
+      description: "Satıcı kendi tokenını kullansa da pending/rejected/cancelled ürünler listelenmez. Oturumla çağrıldığında kartlarda isFavorite ve myTickets kişiye göre döner."
+  "/api/v1/seller-report-reasons":
+    get:
+      tags: ["Reports"]
+      summary: "Şikâyet formundaki tek seçimli nedenler"
+      operationId: "listSellerReportReasons"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerReportReasonsResponse"
+  "/api/v1/sellers/{sellerId}/reports":
+    post:
+      tags: ["Reports"]
+      summary: "Satıcı hakkında şikâyet gönder"
+      operationId: "createSellerReport"
+      responses:
+        "201":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerReport"
+        "400":
+          description: "Geçersiz alan"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          description: "Geçersiz oturum"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          description: "Kayıt bulunamadı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          description: "Sunucu hatası"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          description: "İşlem için yetkiniz yok"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          description: "Kayıt veya durum çakışması"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+      parameters: [{"name": "sellerId", "in": "path", "required": true, "schema": {"type": "string"}}]
+      security: [{"bearerAuth": []}]
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/SellerReportRequest"
+      description: "Açıklama isteğe bağlıdır. Kullanıcı kendisini şikâyet edemez. Aynı kullanıcı ve satıcı için açık bir şikâyet varsa 409 döner. Satıcı ve diğer kullanıcılar şikâyetleri okuyamaz."
+  "/api/v1/operator/seller-reports":
+    get:
+      tags: ["Reports"]
+      summary: "Operatör şikâyet kuyruğu"
+      operationId: "listSellerReports"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerReportPage"
+        "400":
+          description: "Geçersiz alan"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          description: "Geçersiz oturum"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          description: "Kayıt bulunamadı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          description: "Sunucu hatası"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+      parameters: [{"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}, {"name": "offset", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 0, "maximum": 1000000, "default": 0}}, {"name": "status", "in": "query", "required": false, "schema": {"type": "string", "enum": ["open", "resolved", "dismissed", "all"], "default": "open"}}]
+      security: [{"operatorBearerAuth": []}]
+  "/api/v1/operator/seller-reports/{reportId}/resolution":
+    post:
+      tags: ["Reports"]
+      summary: "Şikâyeti sonuçlandır"
+      operationId: "resolveSellerReport"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerReport"
+        "400":
+          description: "Geçersiz alan"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          description: "Geçersiz oturum"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          description: "Kayıt bulunamadı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          description: "Sunucu hatası"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          description: "İşlem için yetkiniz yok"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          description: "Kayıt veya durum çakışması"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+      parameters: [{"name": "reportId", "in": "path", "required": true, "schema": {"type": "string"}}]
+      security: [{"operatorBearerAuth": []}]
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/SellerReportResolutionRequest"
+      description: "Aynı sonuç tekrar gönderildiğinde kayıt değişmez. Sonuçlandırılmış kayıt farklı sonuçla değiştirilemez (409)."
+  "/api/v1/operator/raffles/{raffleId}/cancel":
+    post:
+      tags: ["Operator"]
+      summary: "Çekilişi iptal et ve biletleri iade et"
+      operationId: "cancelRaffle"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/Raffle"
+        "400":
+          description: "Geçersiz alan"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          description: "Geçersiz oturum"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          description: "Kayıt bulunamadı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          description: "Sunucu hatası"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          description: "İşlem için yetkiniz yok"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          description: "Kayıt veya durum çakışması"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApiError"
+      parameters: [{"name": "raffleId", "in": "path", "required": true, "schema": {"type": "string"}}]
+      security: [{"operatorBearerAuth": []}]
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RaffleCancellationRequest"
+      description: "Yalnızca pending/active çekilişler iptal edilebilir. İptal, tüm katılımcılara bilet iadesi, hareket ve bildirim kayıtları aynı MongoDB transactionı içinde kaydedilir. Tekrarlanan iptal ikinci iade üretmez ve ilk gerekçe korunur. Sonlanmış/reddedilmiş çekilişlerde 409 döner."
+  "/api/v1/faqs":
+    get:
+      tags: ["Profile"]
+      summary: "Torba tanıtımı ve Sıkça Sorulan Sorular"
+      operationId: "getFAQs"
+      responses:
+        "200":
+          description: "Başarılı"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/FAQResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -2986,7 +3303,16 @@ components:
       - avatarId
       - avatarUrl
       - createdAt
+      - displayName
+      - ticketBalance
       properties:
+        displayName:
+          type: string
+          example: Hakan Özyurt
+        ticketBalance:
+          type: integer
+          format: int64
+          minimum: 0
         id:
           type: string
           format: uuid
@@ -3359,6 +3685,12 @@ components:
           - active
           - completed
           - rejected
+          - cancelled
+        cancelledAt:
+          type: string
+          format: date-time
+        cancellationReason:
+          type: string
         rejectionReason:
           type: string
         createdAt:
@@ -3404,6 +3736,7 @@ components:
             - Yeni
             - Bitmek üzere
             - Sonlandı
+            - İptal edildi
           progressPercent:
             type: number
             format: double
@@ -3412,6 +3745,10 @@ components:
           remainingTickets:
             type: integer
             format: int64
+          myRefundedTickets:
+            type: integer
+            format: int64
+            minimum: 0
           myTickets:
             type: integer
             format: int64
@@ -3424,6 +3761,7 @@ components:
         - progressPercent
         - remainingTickets
         - myTickets
+        - myRefundedTickets
     MarketProfile:
       type: object
       properties:
@@ -3634,6 +3972,7 @@ components:
           enum:
           - credit
           - participation
+          - raffle_refund
         raffleId:
           type: string
         delta:
@@ -3770,8 +4109,10 @@ components:
       type: object
       properties:
         rating:
-          type: integer
-          format: int64
+          type: number
+          format: double
+          multipleOf: 0.5
+          example: 4.5
           minimum: 1
           maximum: 5
         body:
@@ -3792,8 +4133,10 @@ components:
         raffleId:
           type: string
         rating:
-          type: integer
-          format: int64
+          type: number
+          format: double
+          multipleOf: 0.5
+          example: 4.5
           minimum: 1
           maximum: 5
         body:
@@ -3929,3 +4272,149 @@ components:
       - tickets
       - reason
       additionalProperties: false
+    SellerProfileResponse:
+      type: "object"
+      properties:
+        seller:
+          "$ref": "#/components/schemas/MarketProfile"
+        rating:
+          type: "object"
+          properties:
+            average:
+              type: "number"
+              format: "double"
+              minimum: 0
+              maximum: 5
+            count:
+              type: "integer"
+              format: "int64"
+              minimum: 0
+          required: ["average", "count"]
+        raffleCount:
+          type: "integer"
+          format: "int64"
+          minimum: 0
+        canReport:
+          type: "boolean"
+      required: ["seller", "rating", "raffleCount", "canReport"]
+    SellerReportReason:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+        label:
+          type: "string"
+      required: ["id", "label"]
+    SellerReportReasonsResponse:
+      type: "object"
+      properties:
+        items:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/SellerReportReason"
+        maxDescriptionLength:
+          type: "integer"
+          example: 2000
+      required: ["items", "maxDescriptionLength"]
+    SellerReportRequest:
+      type: "object"
+      properties:
+        reasonId:
+          type: "string"
+          enum: ["misleading_listing", "inappropriate_behavior", "suspected_fraud"]
+        description:
+          type: "string"
+          maxLength: 2000
+      required: ["reasonId"]
+      additionalProperties: false
+    SellerReport:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+        reporterId:
+          type: "string"
+        sellerId:
+          type: "string"
+        reasonId:
+          type: "string"
+        description:
+          type: "string"
+        status:
+          type: "string"
+          enum: ["open", "resolved", "dismissed"]
+        createdAt:
+          type: "string"
+          format: "date-time"
+        resolvedAt:
+          type: "string"
+          format: "date-time"
+        resolution:
+          type: "string"
+      required: ["id", "reporterId", "sellerId", "reasonId", "description", "status", "createdAt"]
+    SellerReportPage:
+      type: "object"
+      properties:
+        items:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/SellerReport"
+        total:
+          type: "integer"
+          format: "int64"
+        limit:
+          type: "integer"
+          format: "int64"
+        offset:
+          type: "integer"
+          format: "int64"
+        hasMore:
+          type: "boolean"
+      required: ["items", "total", "limit", "offset", "hasMore"]
+    SellerReportResolutionRequest:
+      type: "object"
+      properties:
+        status:
+          type: "string"
+          enum: ["resolved", "dismissed"]
+        resolution:
+          type: "string"
+          minLength: 3
+          maxLength: 1000
+      required: ["status", "resolution"]
+      additionalProperties: false
+    RaffleCancellationRequest:
+      type: "object"
+      properties:
+        reason:
+          type: "string"
+          minLength: 3
+          maxLength: 1000
+      required: ["reason"]
+      additionalProperties: false
+    FAQItem:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+        question:
+          type: "string"
+        answer:
+          type: "string"
+      required: ["id", "question", "answer"]
+    FAQResponse:
+      type: "object"
+      properties:
+        title:
+          type: "string"
+          example: "Torba"
+        aboutTitle:
+          type: "string"
+          example: "Torba nedir?"
+        about:
+          type: "string"
+        items:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/FAQItem"
+      required: ["title", "aboutTitle", "about", "items"]

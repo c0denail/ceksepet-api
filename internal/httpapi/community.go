@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -202,15 +203,15 @@ func (s *Server) createReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Rating int    `json:"rating"`
-		Body   string `json:"body"`
+		Rating float64 `json:"rating"`
+		Body   string  `json:"body"`
 	}
 	if e := decodeJSON(w, r, &req); e != nil {
 		writeError(w, 400, *e)
 		return
 	}
-	if req.Rating < 1 || req.Rating > 5 {
-		writeError(w, 400, *validationError("rating", "Puan 1–5 arasında olmalıdır."))
+	if req.Rating < 1 || req.Rating > 5 || math.Mod(req.Rating*2, 1) != 0 {
+		writeError(w, 400, *validationError("rating", "Puan 1–5 arasında, 0.5 adımlı olmalıdır."))
 		return
 	}
 	req.Body = strings.TrimSpace(req.Body)
