@@ -1,0 +1,8 @@
+.git
+.env
+data
+coverage.out
+ceksepet-api
+.DS_Store
+.tools
+ceksepet-api.exe

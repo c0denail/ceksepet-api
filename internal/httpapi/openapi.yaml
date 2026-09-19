@@ -1,0 +1,3931 @@
+openapi: 3.0.3
+info:
+  title: ÇekSepet Mobile API
+  version: 3.0.0
+  description: 'ÇekSepet mobil uygulamasının telefon + 6 haneli PIN + çift aşamalı SMS OTP akışı.
+
+
+    Kayıt sırası:
+
+    1. Kişisel bilgiler ve PIN ile geçici `registrationToken` alınır.
+
+    2. Avatar seçilir; kullanıcı adı sunucuda `ad_soyad@12345` biçiminde üretilir ve SMS gönderilir.
+
+    3. Kayıt SMS kodu doğrulanır; kullanıcı kalıcılaştırılır ve access token üretilir.
+
+
+    Giriş sırası:
+
+    1. Telefon ve PIN doğrulanır; SMS gönderilir ve geçici `loginToken` alınır.
+
+    2. Giriş SMS kodu doğrulanır; access token üretilir.
+
+
+    Access token süre dolumuna sahip değildir, uygulama kapanınca geçerliliğini korur ve
+
+    logout veya hesap silme ile sunucuda iptal edilir. Development/test ortamında Swagger akışını deneyebilmek için
+
+    SMS cevaplarında `debugOtpCode` bulunur; production ortamında bu alan dönmez.
+
+
+    Ürün/çekiliş, fotoğraf, favori, cüzdan, onaylı katılım, soru-cevap, değerlendirme ve bildirim API’leri. Para
+    birimi kuruş, bilet sayısı tam sayıdır. Katılım ve bilet yükleme Idempotency-Key gerektirir.
+
+    '
+servers:
+- url: http://localhost:8080
+  description: Yerel geliştirme
+tags:
+- name: Registration
+  description: Üç ekranlı mobil kayıt akışı
+- name: Login
+  description: Telefon/PIN ve SMS OTP ile giriş
+- name: Session
+- name: Account
+- name: Users
+  description: Kimlik doğrulaması istemeyen sınırlı public profil dizini
+- name: Operator
+  description: Ayrı operatör tokenıyla test ve yönetim işlemleri
+- name: Avatars
+- name: System
+- name: Catalog
+- name: Raffles
+- name: Photos
+- name: Wallet
+- name: Community
+- name: Notifications
+paths:
+  /health/live:
+    get:
+      tags:
+      - System
+      summary: Süreç canlılık kontrolü
+      operationId: live
+      responses:
+        '200':
+          description: Servis çalışıyor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /health/ready:
+    get:
+      tags:
+      - System
+      summary: Veritabanı hazır olma kontrolü
+      operationId: ready
+      responses:
+        '200':
+          description: Servis hazır
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/avatars:
+    get:
+      tags:
+      - Avatars
+      summary: Seçilebilir avatar kataloğunu getir
+      operationId: listAvatars
+      responses:
+        '200':
+          description: Avatarlar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarCatalogResponse'
+  /avatars/{filename}:
+    get:
+      tags:
+      - Avatars
+      summary: Avatar SVG görselini getir
+      operationId: getAvatarImage
+      parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+        example: avatar_01.svg
+      responses:
+        '200':
+          description: SVG avatar
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+        '404':
+          description: Avatar bulunamadı
+  /api/v1/auth/register/step-1:
+    post:
+      tags:
+      - Registration
+      summary: Kişisel bilgileri ve 6 haneli PIN'i al
+      description: Henüz kullanıcı oluşturmaz. Uygulama belleğinde tutulacak kısa ömürlü kayıt tokenı üretir.
+      operationId: registerStep1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterStep1Request'
+            example:
+              firstName: Burak
+              lastName: Yılmaz
+              phone: '+905551112233'
+              pin: '123456'
+      responses:
+        '200':
+          description: Geçici kayıt oturumu açıldı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterStep1Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Telefon zaten kayıtlı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/register/step-2:
+    post:
+      tags:
+      - Registration
+      summary: Avatarı seç, kullanıcı adını üret ve kayıt SMS kodunu gönder
+      operationId: registerStep2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterStep2Request'
+      responses:
+        '200':
+          description: Profil hazırlandı ve SMS gönderildi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterStep2Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/OTPDeliveryFailed'
+  /api/v1/auth/register/otp/verify:
+    post:
+      tags:
+      - Registration
+      summary: Kayıt SMS kodunu doğrula ve kullanıcıyı oluştur
+      operationId: verifyRegistrationOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRegistrationOtpRequest'
+      responses:
+        '200':
+          description: Kayıt tamamlandı ve access token üretildi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/auth/register/otp/resend:
+    post:
+      tags:
+      - Registration
+      summary: Kayıt SMS kodunu yeniden gönder
+      operationId: resendRegistrationOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationTokenRequest'
+      responses:
+        '200':
+          description: Yeni SMS kodu gönderildi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpSentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          $ref: '#/components/responses/OTPDeliveryFailed'
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Login
+      summary: Telefon ve PIN'i doğrula, giriş SMS kodunu gönder
+      description: Bu endpoint access token üretmez. Önce SMS kodu doğrulanmalıdır.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              phone: '+905551112233'
+              pin: '123456'
+      responses:
+        '200':
+          description: PIN doğru; giriş SMS kodu gönderildi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginStartedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          $ref: '#/components/responses/OTPDeliveryFailed'
+  /api/v1/auth/login/otp/verify:
+    post:
+      tags:
+      - Login
+      summary: Giriş SMS kodunu doğrula ve access token üret
+      operationId: verifyLoginOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyLoginOtpRequest'
+      responses:
+        '200':
+          description: Giriş onaylandı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/auth/login/otp/resend:
+    post:
+      tags:
+      - Login
+      summary: Giriş SMS kodunu yeniden gönder
+      operationId: resendLoginOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginTokenRequest'
+      responses:
+        '200':
+          description: Yeni SMS kodu gönderildi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpSentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          $ref: '#/components/responses/OTPDeliveryFailed'
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Session
+      summary: Aktif access tokenı sunucuda iptal et
+      operationId: logout
+      security:
+      - bearerAuth: []
+      responses:
+        '204':
+          description: Token iptal edildi
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/operator/login:
+    post:
+      tags:
+      - Operator
+      summary: Operatör girişi yap ve süreli operatör tokenı al
+      operationId: operatorLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorLoginRequest'
+            example:
+              username: operator
+              password: operator-password-from-env
+      responses:
+        '200':
+          description: Operatör oturumu oluşturuldu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorAuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Operatör girişi yapılandırmada etkin değil
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/operator/logout:
+    post:
+      tags:
+      - Operator
+      summary: Aktif operatör tokenını iptal et
+      operationId: operatorLogout
+      security:
+      - operatorBearerAuth: []
+      responses:
+        '204':
+          description: Operatör tokenı iptal edildi
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/operator/users:
+    get:
+      tags:
+      - Operator
+      summary: Operatör için müşteri listesini getir
+      description: Public listeden farklı olarak telefon alanını da döndürür.
+      operationId: operatorListUsers
+      security:
+      - operatorBearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      responses:
+        '200':
+          description: Sayfalanmış müşteri listesi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorUserListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/operator/users/{userId}:
+    delete:
+      tags:
+      - Operator
+      summary: Müşteriyi ve ilişkili tüm oturumlarını kalıcı olarak sil
+      operationId: operatorDeleteUser
+      security:
+      - operatorBearerAuth: []
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Müşteri silindi
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Müşteri bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Aktif/tamamlanmış satış veya bilet kaydı olan hesap kapatma desteği gerektirir.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/users:
+    get:
+      tags:
+      - Users
+      summary: Public kullanıcı profil listesini getir
+      description: Telefon, PIN özeti ve oturum bilgileri dönmez. Bearer token gerekmez.
+      operationId: listUsers
+      security: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Sayfadaki en fazla kullanıcı sayısı
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        description: Atlanacak kullanıcı sayısı
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      responses:
+        '200':
+          description: En yeni kullanıcıdan eskiye sayfalanmış public profil listesi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUserListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/users/me:
+    get:
+      tags:
+      - Session
+      summary: Giriş yapan kullanıcıyı getir
+      operationId: me
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: Kullanıcı profili
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags:
+      - Account
+      summary: Giriş yapan kullanıcının hesabını kalıcı olarak sil
+      description: 'Bearer token ile giriş yapan kullanıcının kendi kullanıcı adı ve 6 haneli PIN''i
+
+        yeniden doğrulanır. Kullanıcı ve ilişkili oturumlar MongoDB transaction''ı içinde silinir.
+
+        '
+      operationId: deleteAccount
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+            example:
+              username: burak_yilmaz@12345
+              pin: '123456'
+      responses:
+        '204':
+          description: Hesap ve kullanıcıya ait sunucu oturumları silindi
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '409':
+          description: Aktif/tamamlanmış satış veya bilet kaydı olan hesap kapatma desteği gerektirir.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/catalog:
+    get:
+      tags:
+      - Catalog
+      summary: Kategori, marka, sıralama ve ürün ekleme kuralları
+      operationId: getCatalog
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Catalog'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security: []
+      parameters:
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+  /api/v1/content/{slug}:
+    get:
+      tags:
+      - Catalog
+      summary: Ekran bilgilendirme metni
+      operationId: getHelpContent
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HelpContent'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: 'slug: bag-raffle, raffle-safety veya selling. Ekrandaki örnek metinler yerine düzenlenebilir
+        Türkçe başlangıç içerikleri.'
+      security: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/raffles/quote:
+    post:
+      tags:
+      - Raffles
+      summary: Fiyat, kazanç, komisyon ve toplam bilet hesabı
+      operationId: quoteRaffle
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceQuote'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Fiyat kuruş cinsindedir. Kazanç = ceil(fiyat / bilet değeri); komisyon = ceil(kazanç × commissionBps
+        / 10000). Toplam = kazanç + komisyon. Sunucu ürün oluşturulurken tekrar hesaplar.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceQuoteRequest'
+  /api/v1/photos:
+    post:
+      tags:
+      - Photos
+      summary: Ürün fotoğrafı yükle
+      operationId: uploadPhoto
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoUpload'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: file alanında tek JPEG/PNG. En fazla 5 MiB, her kenar en fazla 8000 px ve toplam en fazla 20
+        megapiksel. Onay öncesi yalnızca sahibi ve operatör görebilir. Fotoğraflar MongoDB’de saklanır.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+              additionalProperties: false
+  /api/v1/photos/{photoId}:
+    get:
+      tags:
+      - Photos
+      summary: Fotoğrafı görüntüle
+      operationId: getPhoto
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - {}
+      - bearerAuth: []
+      - operatorBearerAuth: []
+      parameters:
+      - name: photoId
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/raffles:
+    get:
+      tags:
+      - Raffles
+      summary: Anasayfa çekiliş kartları
+      operationId: listRaffles
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RafflePage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: 'Varsayılan aktif çekilişler. Token verilirse isFavorite ve myTickets kullanıcıya göre doldurulur.
+        Sonuç yoksa items: [], total: 0 döner. Diğer etiketler kategori/marka filtresiyle uygulanır.'
+      security:
+      - {}
+      - bearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Ürün başlığı veya marka adı; metin olarak aranır.
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: brandId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - newest
+          - popular
+          default: newest
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - active
+          - completed
+          default: active
+    post:
+      tags:
+      - Raffles
+      summary: Ürün ekle ve onaya gönder
+      operationId: createRaffle
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Raffle'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Fotoğraf sırası korunur. Fotoğraflar kullanıcıya ait ve daha önce kullanılmamış olmalıdır. pending
+        durumunda oluşturulur; yalnızca operatör onayıyla yayına alınır.
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRaffleRequest'
+  /api/v1/raffles/{raffleId}:
+    get:
+      tags:
+      - Raffles
+      summary: Ürün detayı, satıcı, puan ve soru-cevap önizlemesi
+      operationId: getRaffleDetail
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RaffleDetail'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: 'Her kök soruda son 2 yanıt, detayda son 2 soru bulunur. pending/rejected ürünleri yalnızca sahibi
+        görebilir. Puan yoksa average: 0, count: 0 döner. canParticipate durum ve sahipliği gösterir; bakiye kontrolü
+        preview sırasında yapılır.'
+      security:
+      - {}
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/raffles/{raffleId}/related:
+    get:
+      tags:
+      - Raffles
+      summary: Diğer çekilişlere gözat
+      operationId: listRelatedRaffles
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RafflePage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Aynı kategorideki aktif çekilişler; mevcut ürün hariç.
+      security:
+      - {}
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+  /api/v1/users/me/raffles:
+    get:
+      tags:
+      - Raffles
+      summary: Eklediğim ürünler
+      operationId: listMyRaffles
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RafflePage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Katıldığım/favori listelerinde varsayılan active ve completed; kendi ürünlerimde tüm durumlar.
+        myTickets kullanıcının toplam katılım biletidir, soldTickets tüm kullanıcıların toplamıdır.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Ürün başlığı veya marka adı; metin olarak aranır.
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: brandId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - newest
+          - popular
+          default: newest
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - active
+          - completed
+          - pending
+          - rejected
+          - all
+  /api/v1/users/me/participations:
+    get:
+      tags:
+      - Raffles
+      summary: Katıldığım çekilişler
+      operationId: listMyParticipations
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RafflePage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Katıldığım/favori listelerinde varsayılan active ve completed; kendi ürünlerimde tüm durumlar.
+        myTickets kullanıcının toplam katılım biletidir, soldTickets tüm kullanıcıların toplamıdır.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Ürün başlığı veya marka adı; metin olarak aranır.
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: brandId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - newest
+          - popular
+          default: newest
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - active
+          - completed
+  /api/v1/users/me/favorites:
+    get:
+      tags:
+      - Raffles
+      summary: Favorilerim
+      operationId: listMyFavorites
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RafflePage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Katıldığım/favori listelerinde varsayılan active ve completed; kendi ürünlerimde tüm durumlar.
+        myTickets kullanıcının toplam katılım biletidir, soldTickets tüm kullanıcıların toplamıdır.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Ürün başlığı veya marka adı; metin olarak aranır.
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: brandId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - newest
+          - popular
+          default: newest
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - active
+          - completed
+  /api/v1/raffles/{raffleId}/favorite:
+    put:
+      tags:
+      - Raffles
+      summary: Favoriye ekle
+      operationId: addFavorite
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Tekrarlı çağrı aynı sonucu verir; toggle işlemi değildir.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags:
+      - Raffles
+      summary: Favoriden çıkar
+      operationId: removeFavorite
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Tekrarlı çağrı aynı sonucu verir; toggle işlemi değildir.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/users/me/wallet:
+    get:
+      tags:
+      - Wallet
+      summary: Bilet bakiyesi
+      operationId: getWallet
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/users/me/wallet/transactions:
+    get:
+      tags:
+      - Wallet
+      summary: Bilet işlem geçmişi
+      operationId: listTicketTransactions
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketEntryPage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+  /api/v1/raffles/{raffleId}/participation-preview:
+    post:
+      tags:
+      - Wallet
+      summary: Çekiliş onay penceresi için önizleme
+      operationId: previewParticipation
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipationPreview'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Bilet harcamaz veya rezerve etmez. Vazgeç düğmesi için API çağrısı gerekmez. Onay anında bakiye
+        ve kapasite tekrar kontrol edilir.
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipationPreviewRequest'
+  /api/v1/raffles/{raffleId}/participations:
+    post:
+      tags:
+      - Wallet
+      summary: Bilet kullanarak katılımı onayla
+      operationId: confirmParticipation
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketReceipt'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '200':
+          description: Daha önce tamamlanan aynı isteğin makbuzu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketReceipt'
+      description: 'confirmed: true gerekir. Satıcı kendi çekilişine katılamaz. Cüzdan, kapasite, katılım ve makbuz
+        tek MongoDB transaction’ında güncellenir. Kapasite dolunca completed olur; bu durum kazanan seçildiği veya
+        ödeme yapıldığı anlamına gelmez.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{8,128}$
+          example: mobile-action-00000001
+        description: Her yeni işlem için yeni anahtar. Aynı kullanıcı ve anahtar ile aynı istek tekrarlandığında
+          önceki makbuz döner; farklı içerik 409 verir. Makbuzdaki bakiye işlem anına aittir.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipationRequest'
+  /api/v1/raffles/{raffleId}/questions:
+    get:
+      tags:
+      - Community
+      summary: Tüm sorular ve yanıt önizlemeleri
+      operationId: listRaffleQuestions
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionPage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - {}
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+    post:
+      tags:
+      - Community
+      summary: Satıcıya soru sor
+      operationId: createRaffleQuestion
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+  /api/v1/raffles/{raffleId}/questions/{questionId}/replies:
+    get:
+      tags:
+      - Community
+      summary: Bir sorunun tüm yanıtları
+      operationId: listQuestionReplies
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionPage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - {}
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: questionId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+    post:
+      tags:
+      - Community
+      summary: Soruyu yanıtla
+      operationId: createQuestionReply
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: 'Tek seviye yanıt; yalnızca aynı çekilişe ait kök soruya yanıt verilebilir. Satıcı yanıtlarında
+        isSeller: true döner.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: questionId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+  /api/v1/sellers/{sellerId}/reviews:
+    get:
+      tags:
+      - Community
+      summary: Satıcının tüm değerlendirmeleri ve ortalama puanı
+      operationId: listSellerReviews
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewPage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - {}
+      - bearerAuth: []
+      parameters:
+      - name: sellerId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+  /api/v1/raffles/{raffleId}/reviews:
+    post:
+      tags:
+      - Community
+      summary: Satıcıyı değerlendir
+      operationId: createSellerReview
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: 'Başlangıç kuralı: tamamlanmış çekilişe katılan kullanıcı, çekiliş başına bir değerlendirme yapabilir.
+        Satıcı kendini değerlendiremez. Teslimat doğrulaması anlamına gelmez.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+  /api/v1/users/me/notifications:
+    get:
+      tags:
+      - Notifications
+      summary: Bildirimler ve okunmamış sayısı
+      operationId: listNotifications
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      - name: unreadOnly
+        in: query
+        required: false
+        schema:
+          type: boolean
+  /api/v1/users/me/notifications/{notificationId}/read:
+    put:
+      tags:
+      - Notifications
+      summary: Bildirimi okundu işaretle
+      operationId: readNotification
+      responses:
+        '204':
+          description: Başarılı
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/operator/raffles:
+    get:
+      tags:
+      - Operator
+      summary: Onay bekleyen veya filtrelenen ürünler
+      operationId: operatorListRaffles
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RafflePage'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - operatorBearerAuth: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+        description: Ürün başlığı veya marka adı; metin olarak aranır.
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: brandId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - newest
+          - popular
+          default: newest
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1000000
+          default: 0
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - pending
+          - active
+          - completed
+          - rejected
+          - all
+          default: pending
+  /api/v1/operator/raffles/{raffleId}/moderation:
+    post:
+      tags:
+      - Operator
+      summary: Ürünü onayla veya gerekçeyle reddet
+      operationId: moderateRaffle
+      responses:
+        '200':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Raffle'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      description: Yalnızca pending durumundaki ürün değiştirilebilir. Satıcıya bildirim oluşturulur.
+      security:
+      - operatorBearerAuth: []
+      parameters:
+      - name: raffleId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationRequest'
+  /api/v1/operator/users/{userId}/tickets:
+    post:
+      tags:
+      - Operator
+      summary: Kayıtlı gerekçeyle bilet yükle
+      operationId: operatorCreditTickets
+      responses:
+        '201':
+          description: Başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketReceipt'
+        '400':
+          description: Doğrulama hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Geçersiz veya eksik token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Yetki yok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Kayıt bulunamadı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Yetersiz bakiye, kapasite, durum veya idempotency çakışması
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '200':
+          description: Daha önce tamamlanan aynı isteğin makbuzu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketReceipt'
+      description: Yetkili manuel/test bilet yüklemesidir; ödeme sağlayıcısı değildir. Kullanıcı kendine bilet yükleyemez.
+        Operatör ve gerekçe ledger’da tutulur. Toplam bakiye en fazla 1 milyar bilet olabilir.
+      security:
+      - operatorBearerAuth: []
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{8,128}$
+          example: mobile-action-00000001
+        description: Her yeni işlem için yeni anahtar. Aynı kullanıcı ve anahtar ile aynı istek tekrarlandığında
+          önceki makbuz döner; farklı içerik 409 verir. Makbuzdaki bakiye işlem anına aittir.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCreditRequest'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Kayıt veya login SMS doğrulamasından dönen opaque access token
+    operatorBearerAuth:
+      type: http
+      scheme: bearer
+      description: Operatör login endpointinden dönen süreli opaque operatör tokenı
+  responses:
+    BadRequest:
+      description: Geçersiz alan, OTP veya süresi dolmuş geçici oturum
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: Akış adımı veya benzersiz alan çakışması
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Telefon/PIN veya access token geçersiz
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    TooManyRequests:
+      description: SMS yeniden gönderme veya OTP deneme limiti
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    OTPDeliveryFailed:
+      description: SMS sağlayıcısı kodu gönderemedi
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    ServiceUnavailable:
+      description: Servis hazır değil
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          example: ok
+    ApiError:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+          enum:
+          - VALIDATION_ERROR
+          - PHONE_ALREADY_REGISTERED
+          - INVALID_CREDENTIALS
+          - REGISTRATION_SESSION_EXPIRED
+          - LOGIN_SESSION_EXPIRED
+          - INVALID_REGISTRATION_STEP
+          - OTP_INVALID
+          - OTP_EXPIRED
+          - OTP_ATTEMPTS_EXCEEDED
+          - OTP_RATE_LIMITED
+          - PIN_RATE_LIMITED
+          - OTP_DELIVERY_FAILED
+          - REGISTRATION_CONFLICT
+          - UNAUTHORIZED
+          - INVALID_OPERATOR_CREDENTIALS
+          - OPERATOR_RATE_LIMITED
+          - OPERATOR_DISABLED
+          - USER_NOT_FOUND
+          - SERVICE_UNAVAILABLE
+          - INTERNAL_ERROR
+        message:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+        retryAfter:
+          type: integer
+          minimum: 1
+    RegisterStep1Request:
+      type: object
+      additionalProperties: false
+      required:
+      - firstName
+      - lastName
+      - phone
+      - pin
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone:
+          type: string
+          description: E.164 veya Türkiye yerel formatı
+          example: '+905551112233'
+        pin:
+          type: string
+          pattern: ^[0-9]{6}$
+          example: '123456'
+    RegisterStep1Response:
+      type: object
+      required:
+      - registrationToken
+      - currentStep
+      - expiresAt
+      properties:
+        registrationToken:
+          type: string
+          description: Mobil uygulamada kalıcı depoya yazılmamalıdır.
+        currentStep:
+          type: integer
+          enum:
+          - 2
+        expiresAt:
+          type: string
+          format: date-time
+    RegisterStep2Request:
+      type: object
+      additionalProperties: false
+      required:
+      - registrationToken
+      - avatarId
+      properties:
+        registrationToken:
+          type: string
+        avatarId:
+          type: string
+          enum:
+          - avatar_01
+          - avatar_02
+          - avatar_03
+          - avatar_04
+          - avatar_05
+          - avatar_06
+          - avatar_07
+          - avatar_08
+    RegisterStep2Response:
+      allOf:
+      - $ref: '#/components/schemas/OtpSentResponse'
+      - type: object
+        required:
+        - registrationToken
+        - currentStep
+        - username
+        - avatarId
+        - avatarUrl
+        properties:
+          registrationToken:
+            type: string
+          currentStep:
+            type: integer
+            enum:
+            - 3
+          username:
+            type: string
+            pattern: ^[a-z0-9_]+@[0-9]{5}$
+            example: burak_yilmaz@12345
+          avatarId:
+            type: string
+          avatarUrl:
+            type: string
+            format: uri
+    RegistrationTokenRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - registrationToken
+      properties:
+        registrationToken:
+          type: string
+    VerifyRegistrationOtpRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - registrationToken
+      - otpCode
+      properties:
+        registrationToken:
+          type: string
+        otpCode:
+          type: string
+          pattern: ^[0-9]{6}$
+          example: '123456'
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - phone
+      - pin
+      properties:
+        phone:
+          type: string
+          example: '+905551112233'
+        pin:
+          type: string
+          pattern: ^[0-9]{6}$
+          example: '123456'
+    DeleteAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - username
+      - pin
+      properties:
+        username:
+          type: string
+          example: burak_yilmaz@12345
+        pin:
+          type: string
+          pattern: ^[0-9]{6}$
+          description: Kullanıcının mevcut 6 haneli PIN'i
+          example: '123456'
+    OperatorLoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          example: operator
+        password:
+          type: string
+          format: password
+          description: OPERATOR_PASSWORD ortam değişkenindeki parola
+    OperatorAuthResponse:
+      type: object
+      required:
+      - accessToken
+      - tokenType
+      - expiresAt
+      - username
+      properties:
+        accessToken:
+          type: string
+          description: Yalnızca özeti Atlas'ta saklanan operatör Bearer tokenı
+        tokenType:
+          type: string
+          enum:
+          - Bearer
+        expiresAt:
+          type: string
+          format: date-time
+        username:
+          type: string
+    LoginStartedResponse:
+      allOf:
+      - $ref: '#/components/schemas/OtpSentResponse'
+      - type: object
+        required:
+        - loginToken
+        - expiresAt
+        properties:
+          loginToken:
+            type: string
+          expiresAt:
+            type: string
+            format: date-time
+    LoginTokenRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - loginToken
+      properties:
+        loginToken:
+          type: string
+    VerifyLoginOtpRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - loginToken
+      - otpCode
+      properties:
+        loginToken:
+          type: string
+        otpCode:
+          type: string
+          pattern: ^[0-9]{6}$
+          example: '123456'
+    OtpSentResponse:
+      type: object
+      required:
+      - otpSent
+      - maskedPhone
+      - otpExpiresIn
+      - retryAfter
+      properties:
+        otpSent:
+          type: boolean
+          enum:
+          - true
+        maskedPhone:
+          type: string
+        otpExpiresIn:
+          type: integer
+          example: 240
+        retryAfter:
+          type: integer
+          example: 60
+        debugOtpCode:
+          type: string
+          pattern: ^[0-9]{6}$
+          description: Yalnızca development/test ortamında döner.
+    AuthResponse:
+      type: object
+      required:
+      - user
+      - accessToken
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        accessToken:
+          type: string
+          description: Logout veya hesap silme işlemine kadar geçerli opaque bearer token
+    User:
+      type: object
+      required:
+      - id
+      - firstName
+      - lastName
+      - phone
+      - username
+      - avatarId
+      - avatarUrl
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        username:
+          type: string
+        avatarId:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+    PublicUser:
+      type: object
+      required:
+      - id
+      - firstName
+      - lastName
+      - username
+      - avatarId
+      - avatarUrl
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        username:
+          type: string
+        avatarId:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+    PublicUserListResponse:
+      type: object
+      required:
+      - users
+      - total
+      - limit
+      - offset
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicUser'
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+        limit:
+          type: integer
+        offset:
+          type: integer
+    OperatorUserListResponse:
+      type: object
+      required:
+      - users
+      - total
+      - limit
+      - offset
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+        limit:
+          type: integer
+        offset:
+          type: integer
+    Avatar:
+      type: object
+      required:
+      - id
+      - name
+      - url
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+    AvatarCatalogResponse:
+      type: object
+      required:
+      - avatars
+      properties:
+        avatars:
+          type: array
+          items:
+            $ref: '#/components/schemas/Avatar'
+    PriceQuote:
+      type: object
+      properties:
+        priceKurus:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100000000
+          example: 234500
+        ticketValueKurus:
+          type: integer
+          format: int64
+          example: 100
+        commissionBps:
+          type: integer
+          format: int64
+          example: 1000
+        sellerTickets:
+          type: integer
+          format: int64
+          example: 2345
+        commissionTickets:
+          type: integer
+          format: int64
+          example: 235
+        totalTickets:
+          type: integer
+          format: int64
+          example: 2580
+      required:
+      - priceKurus
+      - ticketValueKurus
+      - commissionBps
+      - sellerTickets
+      - commissionTickets
+      - totalTickets
+    PriceQuoteRequest:
+      type: object
+      properties:
+        priceKurus:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100000000
+          example: 234500
+      required:
+      - priceKurus
+      additionalProperties: false
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: string
+      required:
+      - id
+      - name
+    Brand:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+      required:
+      - id
+      - name
+      - categoryIds
+    Catalog:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        brands:
+          type: array
+          items:
+            $ref: '#/components/schemas/Brand'
+        filters:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+            required:
+            - id
+            - label
+        shippingPayers:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+            required:
+            - id
+            - label
+        pricing:
+          type: object
+          properties:
+            currency:
+              type: string
+              enum:
+              - TRY
+            ticketValueKurus:
+              type: integer
+              format: int64
+            commissionBps:
+              type: integer
+              format: int64
+          required:
+          - currency
+          - ticketValueKurus
+          - commissionBps
+        photoRules:
+          type: object
+          properties:
+            minCount:
+              type: integer
+              format: int64
+            maxCount:
+              type: integer
+              format: int64
+            maxBytes:
+              type: integer
+              format: int64
+            contentTypes:
+              type: array
+              items:
+                type: string
+          required:
+          - minCount
+          - maxCount
+          - maxBytes
+          - contentTypes
+        help:
+          type: object
+          properties:
+            raffle:
+              type: string
+            safety:
+              type: string
+            selling:
+              type: string
+          required:
+          - raffle
+          - safety
+          - selling
+      required:
+      - categories
+      - brands
+      - filters
+      - shippingPayers
+      - pricing
+      - photoRules
+      - help
+    HelpContent:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+      required:
+      - title
+      - body
+    CreateRaffleRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 120
+          example: Samsung Galaxy S Tablet
+        description:
+          type: string
+          minLength: 10
+          maxLength: 5000
+          example: Kutusu ve tüm aksesuarları ile temiz tablet.
+        categoryId:
+          type: string
+          example: tablet
+        brandId:
+          type: string
+          example: samsung
+        shippingPayer:
+          type: string
+          enum:
+          - buyer
+          - seller
+        photoIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+        priceKurus:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100000000
+          example: 234500
+      required:
+      - title
+      - description
+      - categoryId
+      - brandId
+      - shippingPayer
+      - photoIds
+      - priceKurus
+      additionalProperties: false
+    Raffle:
+      type: object
+      properties:
+        id:
+          type: string
+        sellerId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: string
+        brandId:
+          type: string
+        shippingPayer:
+          type: string
+          enum:
+          - buyer
+          - seller
+        photoIds:
+          type: array
+          items:
+            type: string
+        quote:
+          $ref: '#/components/schemas/PriceQuote'
+        soldTickets:
+          type: integer
+          format: int64
+          minimum: 0
+        status:
+          type: string
+          enum:
+          - pending
+          - active
+          - completed
+          - rejected
+        rejectionReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - sellerId
+      - title
+      - description
+      - categoryId
+      - brandId
+      - shippingPayer
+      - photoIds
+      - quote
+      - soldTickets
+      - status
+      - createdAt
+    RaffleCard:
+      allOf:
+      - $ref: '#/components/schemas/Raffle'
+      - type: object
+        properties:
+          brandName:
+            type: string
+          categoryName:
+            type: string
+          photoUrls:
+            type: array
+            items:
+              type: string
+              format: uri
+          isFavorite:
+            type: boolean
+          isNew:
+            type: boolean
+          badge:
+            type: string
+            enum:
+            - Yeni
+            - Bitmek üzere
+            - Sonlandı
+          progressPercent:
+            type: number
+            format: double
+            minimum: 0
+            maximum: 100
+          remainingTickets:
+            type: integer
+            format: int64
+          myTickets:
+            type: integer
+            format: int64
+        required:
+        - brandName
+        - categoryName
+        - photoUrls
+        - isFavorite
+        - isNew
+        - progressPercent
+        - remainingTickets
+        - myTickets
+    MarketProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+      required:
+      - id
+      - username
+      - displayName
+      - avatarUrl
+    Question:
+      type: object
+      properties:
+        id:
+          type: string
+        raffleId:
+          type: string
+        parentId:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        author:
+          $ref: '#/components/schemas/MarketProfile'
+        isSeller:
+          type: boolean
+        replyCount:
+          type: integer
+          format: int64
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+      required:
+      - id
+      - raffleId
+      - body
+      - createdAt
+      - author
+      - isSeller
+      - replyCount
+      - replies
+    RafflePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RaffleCard'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      - hasMore
+    QuestionPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      - hasMore
+    RaffleDetail:
+      type: object
+      properties:
+        raffle:
+          $ref: '#/components/schemas/RaffleCard'
+        seller:
+          $ref: '#/components/schemas/MarketProfile'
+        sellerRating:
+          type: object
+          properties:
+            average:
+              type: number
+              format: double
+            count:
+              type: integer
+              format: int64
+          required:
+          - average
+          - count
+        questions:
+          $ref: '#/components/schemas/QuestionPage'
+        canParticipate:
+          type: boolean
+        participationRules:
+          type: object
+          properties:
+            minTickets:
+              type: integer
+              format: int64
+            maxTickets:
+              type: integer
+              format: int64
+            requiresConfirmation:
+              type: boolean
+          required:
+          - minTickets
+          - maxTickets
+          - requiresConfirmation
+      required:
+      - raffle
+      - seller
+      - sellerRating
+      - questions
+      - canParticipate
+      - participationRules
+    PhotoUpload:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+          format: uri
+        contentType:
+          type: string
+          enum:
+          - image/jpeg
+          - image/png
+        size:
+          type: integer
+          format: int64
+        width:
+          type: integer
+          format: int64
+        height:
+          type: integer
+          format: int64
+      required:
+      - id
+      - url
+      - contentType
+      - size
+      - width
+      - height
+    Favorite:
+      type: object
+      properties:
+        raffleId:
+          type: string
+        isFavorite:
+          type: boolean
+      required:
+      - raffleId
+      - isFavorite
+    Wallet:
+      type: object
+      properties:
+        balance:
+          type: integer
+          format: int64
+          minimum: 0
+        ticketValueKurus:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          enum:
+          - TRY
+      required:
+      - balance
+      - ticketValueKurus
+      - currency
+    TicketEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+          - credit
+          - participation
+        raffleId:
+          type: string
+        delta:
+          type: integer
+          format: int64
+        balanceAfter:
+          type: integer
+          format: int64
+        soldTickets:
+          type: integer
+          format: int64
+        raffleStatus:
+          type: string
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - kind
+      - delta
+      - balanceAfter
+      - createdAt
+    TicketEntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketEntry'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      - hasMore
+    TicketReceipt:
+      type: object
+      properties:
+        transaction:
+          $ref: '#/components/schemas/TicketEntry'
+        replayed:
+          type: boolean
+      required:
+      - transaction
+      - replayed
+    ParticipationRequest:
+      type: object
+      properties:
+        tickets:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 200000000
+          example: 200
+        confirmed:
+          type: boolean
+          enum:
+          - true
+      required:
+      - tickets
+      - confirmed
+      additionalProperties: false
+    ParticipationPreviewRequest:
+      type: object
+      properties:
+        tickets:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 200000000
+          example: 200
+        confirmed:
+          type: boolean
+      required:
+      - tickets
+      additionalProperties: false
+    ParticipationPreview:
+      type: object
+      properties:
+        raffleId:
+          type: string
+        tickets:
+          type: integer
+          format: int64
+        balanceBefore:
+          type: integer
+          format: int64
+        balanceAfter:
+          type: integer
+          format: int64
+        remainingTickets:
+          type: integer
+          format: int64
+        requiresConfirmation:
+          type: boolean
+        reserved:
+          type: boolean
+        message:
+          type: string
+      required:
+      - raffleId
+      - tickets
+      - balanceBefore
+      - balanceAfter
+      - remainingTickets
+      - requiresConfirmation
+      - reserved
+      - message
+    QuestionRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: Garantisi devam ediyor mu?
+      required:
+      - body
+      additionalProperties: false
+    ReviewRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 5
+        body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - rating
+      - body
+      additionalProperties: false
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+        sellerId:
+          type: string
+        raffleId:
+          type: string
+        rating:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 5
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - sellerId
+      - raffleId
+      - rating
+      - body
+      - createdAt
+    ReviewView:
+      allOf:
+      - $ref: '#/components/schemas/Review'
+      - type: object
+        properties:
+          author:
+            $ref: '#/components/schemas/MarketProfile'
+        required:
+        - author
+    ReviewPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewView'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+        averageRating:
+          type: number
+          format: double
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      - hasMore
+      - averageRating
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        raffleId:
+          type: string
+        message:
+          type: string
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - kind
+      - raffleId
+      - message
+      - readAt
+      - createdAt
+    NotificationPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+        unreadCount:
+          type: integer
+          format: int64
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      - hasMore
+      - unreadCount
+    ModerationRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - reject
+        reason:
+          type: string
+          maxLength: 1000
+          description: reject için zorunludur.
+      required:
+      - decision
+      additionalProperties: false
+    TicketCreditRequest:
+      type: object
+      properties:
+        tickets:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+      required:
+      - tickets
+      - reason
+      additionalProperties: false

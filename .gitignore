@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+coverage.out
+ceksepet-api
+.DS_Store
+.tools/
+ceksepet-api.exe

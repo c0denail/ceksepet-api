@@ -1,0 +1,25 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: development
+      HTTP_ADDR: ":8080"
+      MONGODB_URI: ${MONGODB_URI:?MONGODB_URI must be set}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-ceksepet}
+      PUBLIC_BASE_URL: http://localhost:8080
+      TOKEN_SECRET: development-only-token-secret-change-me
+      OTP_SECRET: development-only-otp-secret-change-me
+      OPERATOR_USERNAME: ${OPERATOR_USERNAME:-}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-}
+      OPERATOR_TOKEN_TTL: ${OPERATOR_TOKEN_TTL:-8h}
+      TICKET_VALUE_KURUS: ${TICKET_VALUE_KURUS:-100}
+      COMMISSION_BPS: ${COMMISSION_BPS:-1000}
+      CORS_ALLOWED_ORIGINS: "*"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
