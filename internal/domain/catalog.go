@@ -19,7 +19,6 @@ var Brands = []Brand{
 	{ID: "samsung", Name: "Samsung", CategoryIDs: []string{"phone", "tablet", "computer"}},
 	{ID: "xiaomi", Name: "Xiaomi", CategoryIDs: []string{"phone", "tablet"}},
 	{ID: "lenovo", Name: "Lenovo", CategoryIDs: []string{"tablet", "computer"}},
-	{ID: "zara", Name: "Zara", CategoryIDs: []string{"clothing", "shoes"}},
 	{ID: "adidas", Name: "Adidas", CategoryIDs: []string{"clothing", "shoes"}},
 	{ID: "other", Name: "Diğer / Markasız", CategoryIDs: []string{"phone", "tablet", "computer", "clothing", "shoes", "home", "other"}},
 }
